@@ -2,54 +2,57 @@ import { endsWith, flatten, startsWith } from 'lodash';
 import { hasValidationErrors, rules, ObjectValidator, ValueValidator, Validator } from './validate';
 import {} from 'jest';
 
-export const maxLength = (max: number): Validator<string | null> => ({
+export const maxLength = (max: number): ValueValidator<string | null> => ({
   validate: (value: string | null) =>
     (value != null && value.length > max) ? [`Text must be less than ${max} characters`] : []
 });
 
-export const minLength = (min: number): Validator<string | null> => ({
+export const minLength = (min: number): ValueValidator<string | null> => ({
   validate: (value: string | null) =>
     (value != null && value.length < min) ? [`Must be at least ${min} characters`] : []
 });
 
 describe('rules', () => {
   it('will return the result of all of the individual validators, combined into a single array', () => {
-    const beginsWithA: ValueValidator<string> = (someString: string) =>
-      startsWith(someString, 'a') ? ['starts with a'] : [];
-    const finishesWithC: ValueValidator<string>  = (someString: string) =>
-      endsWith(someString, 'c') ? ['ends with c'] : [];
-    const lengthValidator: ValueValidator<string>  = (someString: string) =>
-      someString.length === 0 ? ['required'] : [];
+    const beginsWithA: ValueValidator<string> = ({
+      validate: (someString: string) => startsWith(someString, 'a') ? ['starts with a'] : []
+  });
+    const finishesWithC: ValueValidator<string> = ({
+      validate: (someString: string) => endsWith(someString, 'c') ? ['ends with c'] : []
+  });
+    const lengthValidator: ValueValidator<string>  = ({
+      validate: (someString: string) => someString.length === 0 ? ['required'] : []
+    });
 
-    const combinedValidator: ValueValidator<string>  = rules(
+    const combinedValidator: ValueValidator<string> = rules(
       beginsWithA,
       finishesWithC,
       lengthValidator,
     );
 
     const sampleInput = 'abc';
-    const validationResult: Array<string> = combinedValidator(sampleInput);
+    const validationResult: Array<string> = combinedValidator.validate(sampleInput);
 
-    expect(validationResult).toEqual(flatten([beginsWithA(sampleInput), finishesWithC(sampleInput)]));
+    expect(validationResult).toEqual(flatten([beginsWithA.validate(sampleInput), finishesWithC.validate(sampleInput)]));
   });
 });
 
 describe('validate', () => {
   it('returns an object with key value pairs for values which fail validation', () => {
     type MyObject = { name: string };
-    const constraints: Validator<MyObject> = new ObjectValidator({ name: rules(minLength(5), maxLength(10)) });
-    const validationResult = (validate(constraints, { name: '' }) as any).name;
+    const constraints: ObjectValidator<MyObject> = new ObjectValidator({ name: rules(minLength(5), maxLength(10)) });
+    const validationResult = constraints.validate({ name: '' }).name;
 
     expect(validationResult && validationResult.length).toBeGreaterThan(0);
   });
 
   it('returns an object which only has keys for values that have validation errors', () => {
     type OtherObject = { name: string, validKey: number };
-    const constraints: Validator<OtherObject> = {
+    const constraints: ObjectValidator<OtherObject> = new ObjectValidator<OtherObject>({
       name: rules(minLength(5), maxLength(10)),
-      validKey: (number: number) => [],
-    };
-    const validationResult = (validate(constraints, { name: '', validKey: 6 }) as any);
+      validKey: { validate: (number: number) => [] },
+    });
+    const validationResult = constraints.validate({ name: '', validKey: 6 });
 
     expect(validationResult.name.length).toBeGreaterThan(0);
     expect(validationResult.validKey).toBeUndefined();

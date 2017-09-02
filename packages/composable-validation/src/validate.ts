@@ -1,7 +1,6 @@
 import { chain, flatMap, mapValues, pickBy, some } from 'lodash';
 
 export type ValidationErrors = Array<string>;
-export type ValueValidator<T> = (value: T) => ValidationErrors;
 export type Template<T> = {
   [P in keyof T]?: Validator<T[P]>
 };
@@ -10,12 +9,16 @@ export interface Validator<T> {
   validate(item: T): ValidationErrors | ValidationResult<T>
 }
 
+export interface ValueValidator<T> extends Validator<T> {
+  validate(item: T): ValidationErrors
+}
+
 export class ObjectValidator<T> implements Validator<T> {
   private template: Template<T>;
 
   constructor(temp: Template<T>) { this.template = temp }
 
-  validate(object: T) {
+  validate(object: T): ValidationResult<T> {
     return pickBy(
       mapValues(
         this.template,
@@ -31,7 +34,7 @@ export type ValidationResult<T> = {
 };
 
 export const rules = <T>(...validators: Array<ValueValidator<T>>): ValueValidator<T> =>
-  (value) => flatMap(validators, (validator) => validator(value));
+  ({ validate: (value: T) => flatMap(validators, (validator) => validator.validate(value)) });
 
 // ToDo fix validateKey
 export const validateKey =
